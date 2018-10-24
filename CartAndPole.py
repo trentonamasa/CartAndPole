@@ -9,6 +9,7 @@ import random
 import gym
 import matplotlib.pyplot as plt
 
+random.seed(666)
 
 #GLOBAL CONSTANTS
 FORCE_MAG = 10
@@ -20,19 +21,22 @@ GRAVITY = 9.8
 LENGTH = 0.326
 FOURTHIRDS = 4/3
 GAMMA = 0.5
-ALPHA = 0.1
+ALPHA = 0.5
 
 lookUpTable = []
-for action in range(0,2):
-    lookUpTable.append([])
-    for theta in range(0,6):
-        lookUpTable[action].append([])
-        for thetaDot in range(0,3):
-            lookUpTable[action][theta].append([])
-            for x in range(0,3):
-                lookUpTable[action][theta][thetaDot].append([])
-                for xDot in range(0,3):
-                    lookUpTable[action][theta][thetaDot][x].append(random.randint(0,51))
+
+def fillTable():
+    global lookUpTable
+    for action in range(0,2):
+        lookUpTable.append([])
+        for theta in range(0,6):
+            lookUpTable[action].append([])
+            for thetaDot in range(0,3):
+                lookUpTable[action][theta].append([])
+                for x in range(0,3):
+                    lookUpTable[action][theta][thetaDot].append([])
+                    for xDot in range(0,3):
+                        lookUpTable[action][theta][thetaDot][x].append(random.randint(-10,10))
                 
 
 class state:
@@ -47,14 +51,21 @@ class state:
 def main():    
     attempt = 0
     listofAttempts = []
+    listofAttemptsVariable = []
+    fillTable()
     while attempt < 100:
         iterator = 0
+        previousState = state(0, 0, 0, 0)
         currState = state(0, 0, 0, 0)
         action = True # True = right, False = left
         inBounds = True
-        while (inBounds):
+        while (inBounds):        
             action = argMaxQ(currState)
-            updateQTable(action, currState)
+            updateQTable(action, currState, previousState)
+            previousState.x = currState.x
+            previousState.xDot = currState.xDot
+            previousState.theta = currState.theta
+            previousState.thetaDot = currState.thetaDot
             cartPoleReaction(action, currState)
             inBounds = checkInBounds(currState)
             iterator += 1
@@ -62,12 +73,37 @@ def main():
         attempt += 1
         print("Attempt: ", attempt, "   Iterations: ", iterator)
         listofAttempts.append(iterator)
+        
+        global lookUpTable
+        lookUpTable = []
+        global ALPHA, GAMMA, FORCE_MAG
+        GAMMA = 10
+        FORCE_MAG = .5 
+        ALPHA = 10
+        # random.seed(666)
+        fillTable()
+        iterator = 0
+        currState = state(0, 0, 0, 0)
+        action = True # True = right, False = left
+        inBounds = True
+        while (inBounds):
+            previousState = currState
+            action = argMaxQ(currState)
+            updateQTable(action, currState, previousState)
+            cartPoleReaction(action, currState)
+            inBounds = checkInBounds(currState)
+            iterator += 1
+        listofAttemptsVariable.append(iterator)
 
-    plt.plot(listofAttempts)
+
+    plt.plot(listofAttempts, "red", label = 'Control')
+    plt.plot(listofAttemptsVariable, "blue", label = 'Variable')
     plt.title('Attempts vs. Iterations')
     plt.xlabel('Attempts')
     plt.ylabel('number of iterations')
+    plt.legend()
     plt.show()
+
 
     
 
@@ -80,15 +116,15 @@ def checkInBounds(currState):
         return True
 
 
-def updateQTable(action, currState):
-    lookUpTable[int(action)][thetaToCatagory(currState)][thetaDotToCatagory(currState)][xToCatagory(currState)][xDotToCatagory(currState)] += ALPHA*(calcReward(currState) + GAMMA*(maxQ(action, currState)) - lookUpTable[int(action)][thetaToCatagory(currState)][thetaDotToCatagory(currState)][xToCatagory(currState)][xDotToCatagory(currState)])
+def updateQTable(action, currState, previousState):
+    lookUpTable[int(action)][thetaToCatagory(currState)][thetaDotToCatagory(currState)][xToCatagory(currState)][xDotToCatagory(currState)] += ALPHA*(calcReward(currState) + GAMMA*(maxQ(action, currState)) - lookUpTable[int(action)][thetaToCatagory(previousState)][thetaDotToCatagory(previousState)][xToCatagory(previousState)][xDotToCatagory(previousState)])
 
 
 def calcReward(currState):
     reward = 0
 
     if currState.theta >= -12 and currState.theta < -6:
-        reward += 1
+        reward += -1
     elif currState.theta >= -6 and currState.theta < -1:
         reward += 2
     elif currState.theta >= -1 and currState.theta < 0:
@@ -98,14 +134,14 @@ def calcReward(currState):
     elif currState.theta >= 1 and currState.theta < 6:
         reward += 2
     elif currState.theta >= 6 and currState.theta <= 12:
-        reward += 1
+        reward += -1
 
     if currState.x >= -2.4 and currState.x < -0.8:
-        reward += 1
+        reward += -1
     elif currState.x >= -0.8 and currState.x < 0.8:
         reward += 3
     elif currState.x >= 0.8 and currState.x <= 2.4:
-        reward += 1
+        reward += -1
     
     return reward
 
